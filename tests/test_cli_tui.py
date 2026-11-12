@@ -64,6 +64,15 @@ def make_app(fake: FakeNpm, tmp_path) -> BulkSslApp:
     return BulkSslApp(Session(client, "me", client.certificates(), client.hosts(), home=tmp_path))
 
 
+async def wait_for_result(app, pilot) -> None:
+    """The run happens in a worker thread; wait until the progress screen has its result."""
+    for _ in range(200):
+        if isinstance(app.screen, ProgressScreen) and app.screen.result is not None:
+            return
+        await pilot.pause(0.05)
+    raise AssertionError("run did not finish")
+
+
 async def test_tui_full_flow(fake: FakeNpm, tmp_path) -> None:
     app = make_app(fake, tmp_path)
     async with app.run_test(size=(160, 50)) as pilot:
@@ -105,8 +114,7 @@ async def test_tui_full_flow(fake: FakeNpm, tmp_path) -> None:
         await pilot.click("#apply")
         await pilot.pause()
         assert isinstance(app.screen, ProgressScreen)
-        await app.workers.wait_for_complete()
-        await pilot.pause()
+        await wait_for_result(app, pilot)
         await pilot.press("q")
     assert app.return_value is not None and len(app.return_value.succeeded) == 1
     assert fake.hosts["proxy"][0]["certificate_id"] == 1 and fake.hosts["proxy"][0]["hsts_enabled"] is True
@@ -130,8 +138,7 @@ async def test_tui_dry_run_and_header_sort(fake: FakeNpm, tmp_path) -> None:
         assert len(confirm.plan.mismatched) == 1
         confirm.query_one("#dry", Checkbox).value = True
         await pilot.click("#apply")
-        await app.workers.wait_for_complete()
-        await pilot.pause()
+        await wait_for_result(app, pilot)
         await pilot.press("q")
     assert app.return_value.dry_run and not fake.puts
     assert {r.status for r in app.return_value.results} == {"dry-run"}
