@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1" # weekly: catch NPM API changes in the latest image
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv pip install -e ".[dev]"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync mypy src
+      - run: uv run --no-sync pytest -q
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      npm:
+        image: jc21/nginx-proxy-manager:latest
+        ports: ["18081:81"]
+        env:
+          INITIAL_ADMIN_EMAIL: admin@example.com
+          INITIAL_ADMIN_PASSWORD: changeme123
+        volumes:
+          - npm-data:/data
+          - npm-le:/etc/letsencrypt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv pip install -e ".[dev]" cryptography
+      - name: Wait for NPM
+        run: |
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:18081/api/ && exit 0; sleep 3; done
+          exit 1
+      - run: uv run --no-sync pytest -q tests/test_e2e_real_npm.py
+        env:
+          NPM_E2E_URL: http://127.0.0.1:18081
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - name: Smoke-test the installed wheel
+        run: |
+          uv tool install dist/*.whl
+          npm-bulk-ssl --version
+          npm-bulk-ssl apply --help > /dev/null
