@@ -16,20 +16,175 @@ editing them one by one in the web UI.
 
 ![Host selection](docs/2-hosts.svg)
 
-## Install
+## Install and run on each OS
 
-Requires Python 3.10+. Install it as an isolated tool with [uv](https://docs.astral.sh/uv/) (recommended) or pipx:
+You don't install it on the NPM server. It runs on any machine that can reach the NPM admin port (usually `81`): your
+laptop, a jump host, or the NPM server itself over SSH. It talks to NPM over its REST API only.
+
+The recommended installer is [uv](https://docs.astral.sh/uv/). It installs the tool in its own isolated environment and
+**downloads a suitable Python by itself**, so you don't need Python or git installed first. [pipx](https://pipx.pypa.io/)
+works too if you already use it (that route needs Python 3.10+).
+
+The release file used below is
+`https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl`. Newer versions are
+listed on the [Releases page](https://github.com/dr-rei/npm-bulk-ssl/releases).
+
+### Windows 10 / 11
+
+Open **PowerShell**, preferably in [Windows Terminal](https://aka.ms/terminal) for the best colours and mouse support.
+
+1. Install uv, using either winget or the official script:
+
+   ```powershell
+   winget install --id=astral-sh.uv -e
+   ```
+
+   ```powershell
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+2. Close and reopen the terminal, then install the tool:
+
+   ```powershell
+   uv tool install https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl
+   ```
+
+3. If `npm-bulk-ssl` is "not recognized", run `uv tool update-shell` and reopen the terminal.
+4. Run it:
+
+   ```powershell
+   npm-bulk-ssl
+   ```
+
+Backups and the audit log go to `%USERPROFILE%\.npm-bulk-ssl\`. In PowerShell, environment variables for headless use are
+set like `$env:NPM_URL = "http://10.0.0.5:81"`.
+
+### macOS (Intel and Apple Silicon)
+
+1. Install uv, using either Homebrew or the official script:
+
+   ```bash
+   brew install uv
+   ```
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. Install the tool:
+
+   ```bash
+   uv tool install https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl
+   ```
+
+3. If the command isn't found, run `uv tool update-shell` and open a new terminal tab.
+4. Run `npm-bulk-ssl`.
+
+Terminal.app works. iTerm2, Ghostty and WezTerm give smoother rendering. Backups go to `~/.npm-bulk-ssl/`.
+
+### Linux (Debian/Ubuntu, RHEL/Rocky/Alma, Fedora, Arch, Alpine…)
+
+1. Install uv. You need `curl`, which minimal images may lack: `sudo apt install curl` or `sudo dnf install curl`.
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. Install the tool:
+
+   ```bash
+   uv tool install https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl
+   ```
+
+3. If the command isn't found, run `uv tool update-shell` or add `~/.local/bin` to your `PATH`, then open a new shell.
+4. Run `npm-bulk-ssl`.
+
+To use pipx instead: on Debian/Ubuntu, `sudo apt install pipx && pipx ensurepath`. On Fedora/RHEL, `sudo dnf install pipx`.
+Then install with `pipx install <the .whl URL above>`.
+
+**Running on the NPM server over SSH:** the interface works fine over SSH (`ssh user@npm-host`, then `npm-bulk-ssl`).
+Use `127.0.0.1:81` as the NPM address. If NPM runs in Docker with port 81 published, that address reaches it. Mouse clicks
+work in most SSH clients, and every action also has a keyboard shortcut.
+
+### Upgrade, pin, uninstall (all OSes)
 
 ```bash
-uv tool install git+https://github.com/dr-rei/npm-bulk-ssl
+uv tool install --force https://github.com/dr-rei/npm-bulk-ssl/releases/download/vX.Y.Z/npm_bulk_ssl-X.Y.Z-py3-none-any.whl
 ```
 
 ```bash
-pipx install git+https://github.com/dr-rei/npm-bulk-ssl
+uv tool install git+https://github.com/dr-rei/npm-bulk-ssl@v1.0.0
 ```
 
-To pin a release: `uv tool install git+https://github.com/dr-rei/npm-bulk-ssl@v1.0.0`. To upgrade:
-`uv tool upgrade npm-bulk-ssl`. To try it without installing: `uvx --from git+https://github.com/dr-rei/npm-bulk-ssl npm-bulk-ssl`.
+```bash
+uv tool uninstall npm-bulk-ssl
+```
+
+The first command upgrades or pins a release. The second installs straight from a git tag, which needs git. The third
+uninstalls; it leaves your backups in `~/.npm-bulk-ssl`.
+
+To try it once without installing anything permanently:
+`uvx --from https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl npm-bulk-ssl`.
+
+### Offline / air-gapped machines
+
+On a machine with internet and the **same OS and CPU type** as the target, download the tool and its dependencies:
+
+```bash
+python -m pip download --dest npm-bulk-ssl-offline https://github.com/dr-rei/npm-bulk-ssl/releases/download/v1.0.0/npm_bulk_ssl-1.0.0-py3-none-any.whl
+```
+
+Copy the folder to the target, which needs Python 3.10+, and install from it:
+
+```bash
+python -m pip install --user --no-index --find-links npm-bulk-ssl-offline npm-bulk-ssl
+```
+
+### First run checklist
+
+1. Make sure this machine can reach the admin port: open `http://<npm-ip>:81` in a browser from it.
+2. Run `npm-bulk-ssl` and enter the address (`10.0.0.5` → `http://10.0.0.5:81`; use `https://…` if your admin UI is behind TLS).
+   For an internal CA add `--ca-bundle ca.pem`. For a self-signed certificate add `--insecure`.
+3. On the review screen, tick **Dry run** and apply once. Nothing changes, but you see the full plan, and a backup and
+   audit entry are written.
+4. Go back (`Esc`), untick dry run, apply for real, and keep the printed `rollback` command.
+
+### Automating it (cron / Task Scheduler / CI)
+
+Use the headless `apply` command with a **dedicated NPM user** that has only the permissions this needs. Pass the password
+through an environment variable from your secret store, never on the command line.
+
+Linux/macOS cron. Keep the variables in a file only you can read, for example `chmod 600 ~/.npm-bulk-ssl.env`:
+
+```bash
+# ~/.npm-bulk-ssl.env
+NPM_URL=http://10.0.0.5:81
+NPM_EMAIL=automation@example.com
+NPM_PASSWORD=change-me
+```
+
+```bash
+set -a; . ~/.npm-bulk-ssl.env; set +a; npm-bulk-ssl apply --cert-id 7 --match '*.example.com' --current-cert 3 --yes
+```
+
+Windows Task Scheduler: create a task that runs `powershell.exe` with a script that sets `$env:NPM_URL`, `$env:NPM_EMAIL`
+and `$env:NPM_PASSWORD` (read the password from Windows Credential Manager or your vault), then calls `npm-bulk-ssl apply … --yes`.
+
+In CI (GitHub Actions, GitLab…), store `NPM_PASSWORD` as a masked secret, install with `uv tool install <whl URL>` and run
+`npm-bulk-ssl apply … --yes`. Branch on the exit codes listed below. An account with 2FA needs `NPM_TOTP` for every run,
+so use a non-2FA service account for automation.
+
+### Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Cannot reach NPM at …` | Wrong address or port, or a firewall is blocking it. Check the admin UI opens in a browser from this machine |
+| `certificate verify failed` | HTTPS admin endpoint with an internal or self-signed certificate: use `--ca-bundle ca.pem` or `--insecure` |
+| `Invalid email or password` / `Invalid verification code` | Check the credentials. 2FA codes expire every 30 s |
+| `refusing to change hosts without confirmation` | Headless with no terminal: add `--yes`, or `--dry-run` to preview |
+| `the interactive UI needs a terminal` | Output is piped or redirected. Run it in a real terminal, or use `apply` |
+| Garbled boxes or colours on Windows | Use Windows Terminal instead of the legacy console |
+| Some hosts `FAILED` | Others still applied. Fix the cause shown, then rerun: hosts already on the new certificate are skipped |
 
 ## Interactive use
 
